@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>California Housing Price Prediction</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+        }
+
+        form {
+            display: flex;
+            flex-direction: column;
+            width: 300px;
+        }
+
+        label {
+            margin-top: 10px;
+        }
+
+        input[type="number"] {
+            padding: 5px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        button {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #3e8e41;
+        }
+
+        #prediction {
+            margin-top: 20px;
+            font-weight: bold;
+        }
+
+        #chartContainer {
+            width: 400px;
+            height: 300px;
+            margin-top: 20px;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>California Housing Price Prediction</h1>
+
+    <p>Enter the following details to predict the median house value in California.</p>
+
+    <form id="predictionForm">
+        <label for="MedInc">Median Income (in tens of thousands of US Dollars):</label>
+        <input type="number" id="MedInc" name="MedInc" step="0.0001" placeholder="8.3252"
+               title="Median income for households within a block of houses (e.g., 8.3252 represents $83,252)" required>
+        <p style="font-size: smaller; margin-top: -5px;">Median income for households within a block of houses (in tens of thousands of US Dollars).  Higher values generally indicate more affluent areas.</p>
+
+        <label for="HouseAge">Median Housing Age (lower is newer):</label>
+        <input type="number" id="HouseAge" name="HouseAge" step="1" placeholder="41"
+               title="Median age of houses within a block. Lower values indicate newer construction." required>
+        <p style="font-size: smaller; margin-top: -5px;">Median age of houses within a block. A lower number indicates newer buildings.</p>
+
+        <label for="AveRooms">Average Rooms per Household:</label>
+        <input type="number" id="AveRooms" name="AveRooms" step="0.0001" placeholder="6.9841"
+               title="Average number of rooms per household within a block." required>
+        <p style="font-size: smaller; margin-top: -5px;">Average number of rooms per household within a block. A higher number often indicates larger homes.</p>
+
+        <label for="AveBedrms">Average Bedrooms per Household:</label>
+        <input type="number" id="AveBedrms" name="AveBedrms" step="0.0001" placeholder="1.0238"
+               title="Average number of bedrooms per household within a block." required>
+        <p style="font-size: smaller; margin-top: -5px;">Average number of bedrooms per household within a block.</p>
+
+        <label for="Population">Population of the Block:</label>
+        <input type="number" id="Population" name="Population" step="1" placeholder="322"
+               title="Total number of people residing within a block." required>
+        <p style="font-size: smaller; margin-top: -5px;">Total number of people residing within a block.  Higher population density can affect house prices.</p>
+
+        <label for="AveOccup">Average Household Occupancy:</label>
+        <input type="number" id="AveOccup" name="AveOccup" step="0.0001" placeholder="2.5555"
+               title="Average number of people per household within a block." required>
+        <p style="font-size: smaller; margin-top: -5px;">Average number of people per household within a block.</p>
+
+        <label for="Latitude">Latitude (North-South Position):</label>
+        <input type="number" id="Latitude" name="Latitude" step="0.0001" placeholder="37.88"
+               title="Latitude: A measure of how far north a house is. Higher value = farther north" required>
+        <p style="font-size: smaller; margin-top: -5px;">A measure of how far north a house is. Higher values represent locations farther north.</p>
+
+        <label for="Longitude">Longitude (East-West Position):</label>
+        <input type="number" id="Longitude" name="Longitude" step="0.0001" placeholder="-122.23"
+               title="Longitude: A measure of how far west a house is. Higher value = farther west" required>
+        <p style="font-size: smaller; margin-top: -5px;">A measure of how far west a house is.  Higher values represent locations farther west.</p>
+
+        <button type="submit">Predict Price</button>
+    </form>
+
+    <div id="prediction"></div>
+
+    <div id="chartContainer">
+        <canvas id="priceChart"></canvas>
+    </div>
+
+    <script>
+        let priceChart = null;
+
+        document.getElementById('predictionForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+
+            const formData = {
+                MedInc: parseFloat(document.getElementById('MedInc').value),
+                HouseAge: parseFloat(document.getElementById('HouseAge').value),
+                AveRooms: parseFloat(document.getElementById('AveRooms').value),
+                AveBedrms: parseFloat(document.getElementById('AveBedrms').value),
+                Population: parseInt(document.getElementById('Population').value),
+                AveOccup: parseFloat(document.getElementById('AveOccup').value),
+                Latitude: parseFloat(document.getElementById('Latitude').value),
+                Longitude: parseFloat(document.getElementById('Longitude').value)
+            };
+
+            fetch('/predict', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    document.getElementById('prediction').textContent = 'Error: ' + data.error;
+                    if (priceChart) {
+                        priceChart.destroy();
+                        priceChart = null;
+                    }
+                } else {
+                    const predictedPriceRaw = data.prediction;
+                    const predictedPriceDollars = predictedPriceRaw * 100000;
+
+                    const formattedPrice = new Intl.NumberFormat('en-US', {
+                        style: 'currency',
+                        currency: 'USD',
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0
+                    }).format(predictedPriceDollars);
+
+                    document.getElementById('prediction').textContent = 'Predicted Price: ' + formattedPrice;
+
+                    if (priceChart) {
+                        priceChart.data.datasets[0].data = [predictedPriceRaw];
+                        priceChart.update();
+                    } else {
+                        const ctx = document.getElementById('priceChart').getContext('2d');
+                        priceChart = new Chart(ctx, {
+                            type: 'bar',
+                            data: {
+                                labels: ['Predicted Price'],
+                                datasets: [{
+                                    label: 'Price (Hundreds of Thousands)',
+                                    data: [predictedPriceRaw],
+                                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                                    borderColor: 'rgba(54, 162, 235, 1)',
+                                    borderWidth: 1
+                                }]
+                            },
+                            options: {
+                                scales: {
+                                    y: {
+                                        beginAtZero: true
+                                    }
+                                }
+                            }
+                        });
+                    }
+                }
+            })
+            .catch(error => {
+                document.getElementById('prediction').textContent = 'An error occurred: ' + error;
+                if (priceChart) {
+                    priceChart.destroy();
+                    priceChart = null;
+                }
+            });
+        });
+    </script>
+</body>
+</html>
